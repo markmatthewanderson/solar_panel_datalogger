@@ -14,22 +14,33 @@ SdFile root;
 const int chipSelect = 10;
 
 // name of file to write to
-String dataFileName = "data.csv";
+String dataFileName;
 
 void setup() 
 {
-
+  // choose name of file to write to
+  dataFileName = "data.csv";
 }
 
 void loop() 
 {
-
+  // wait for interrupt
+  //asm volatile ("sleep");
 }
 
-void log(String data)
+void sd_write(String data)
 {
   // open file
   File dataFile = SD.open(dataFileName, FILE_WRITE);
 
-  
+  // write to file if it's available
+  if (dataFile)
+  {
+    dataFile.println(data);
+    dataFile.close();
+  }
+  else
+  {
+    // error indication here?
+  }
 }
