@@ -38,18 +38,35 @@ uint32_t data;
 
 void setup() 
 {
+  //#ifdef DEBUG
+    Serial.begin(9600);
+    while(!Serial);
+    Serial.println("Debug mode active.");
+    Serial.flush();
+  //#endif
+
+  if (!rtc.begin()) 
+  {
+    Serial.println("Couldn't find RTC");
+    Serial.flush();
+    abort();
+  }
+
+  // let things settle down a bit
+  delay(1000);
+  
   // set up timer interrupt
-  rtc.begin();
-  rtc.deconfigureAllTimers();
   pinMode(interruptPin, INPUT_PULLUP);
+  rtc.deconfigureAllTimers();
   //rtc.enableCountdownTimer(PCF8523_FrequencyMinute, 5);
   rtc.enableCountdownTimer(PCF8523_FrequencySecond, 30);
   attachInterrupt(digitalPinToInterrupt(interruptPin), timer_interrupt, FALLING);
+  //attachInterrupt(digitalPinToInterrupt(interruptPin), toggle_led, FALLING);
 
   // get current date/time
   DateTime now = rtc.now();
   
-  // choose name of file to write to
+  //// choose name of file to write to
   dataFileName = String(now.day()) + monthNames[now.month()-1] + String(now.year()) + "_solar_panel_data.csv";
 
   // setup onboard LED
@@ -57,11 +74,6 @@ void setup()
 
   // initialize data variable
   data = 0;
-
-  //#ifdef DEBUG
-    Serial.begin(57600);
-    Serial.println("Debug mode active.");
-  //#endif
 }
 
 void loop() 
@@ -69,15 +81,18 @@ void loop()
   // wait for interrupt
   //asm volatile ("sleep");
   // sleep forever, analog to digital converter on, brown out detector on
-  //LowPower.powerDown(SLEEP_FOREVER, ADC_ON, BOD_ON);
-  delay(10000);
+  Serial.println("Enter sleep.");
+  Serial.flush();
+  LowPower.powerDown(SLEEP_FOREVER, ADC_ON, BOD_ON);
+  //delay(10000);
   
   //#ifdef DEBUG
     Serial.println("Finished one iteration of loop().");
+    Serial.flush();
   //#endif
 }
 
-void sd_write(String data)
+void sd_write(String data_item)
 {
   // open file
   File dataFile = SD.open(dataFileName, FILE_WRITE);
@@ -85,7 +100,7 @@ void sd_write(String data)
   // write to file if it's available
   if (dataFile)
   {
-    dataFile.println(data);
+    dataFile.println(data_item);
     dataFile.close();
   }
   else
@@ -96,35 +111,39 @@ void sd_write(String data)
 
 void timer_interrupt()
 {
+  //digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
   // disable interrupts
-  noInterrupts();
+  //noInterrupts();
+  //rtc.disableCountdownTimer();
   
   //#ifdef DEBUG
-    Serial.flush();
     Serial.println("Entered interrupt handler.");
+    Serial.flush();
   //#endif
   
   // turn on LED
-  digitalWrite(LED_BUILTIN, HIGH);
+  //digitalWrite(LED_BUILTIN, HIGH);
 
   // collect data
-  data++;
+  //data++;
 
   // log data
-  DateTime now = rtc.now();
+  //DateTime now = rtc.now();
   //sd_write(String(now.day()) + monthNames[now.month()-1] + String(now.year()) + " " + String(now.hour()) + ":" + String(now.minute()) + ":" + String(now.second()) + 
   //  + ", " + String(data) + "\n");
   
   // allow timer interrupt to clear (default interrupt length is 3/64th of a second)
-  delay(250);
+  //delay(1000);
 
   // turn off LED
-  digitalWrite(LED_BUILTIN, LOW);
+  //digitalWrite(LED_BUILTIN, LOW);
 
   //#ifdef DEBUG
     Serial.println("Exited interrupt handler.");
+    Serial.flush();
   //#endif
 
   // re-enable interrupts
-  interrupts();
+  //interrupts();
+  //rtc.enableCountdownTimer(PCF8523_FrequencySecond, 30);
 }
