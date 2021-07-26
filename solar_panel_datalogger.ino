@@ -43,6 +43,8 @@ void setup()
 
   if (!rtc.begin()) 
   {
+    Serial.println("Unable to find RTC.");
+    Serial.flush();
     while(1)
     {
       delay(500);
@@ -53,6 +55,8 @@ void setup()
   pinMode(chipSelect, OUTPUT);
   if (!SD.begin(chipSelect))
   {
+    Serial.println("Unable to find SD.");
+    Serial.flush();
     while(1)
     {
       delay(500);
