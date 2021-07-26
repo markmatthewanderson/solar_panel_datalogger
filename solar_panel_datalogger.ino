@@ -1,16 +1,9 @@
-#define DEBUG
-
 // include low power functionality
 #include <LowPower.h>
 
 // include the SD library:
 #include <SPI.h>
 #include <SD.h>
-
-// set up variables using the SD utility library functions:
-Sd2Card card;
-SdVolume volume;
-SdFile root;
 
 // change this to match your SD shield or module;
 // Adafruit SD shields and modules: pin 10
@@ -24,14 +17,17 @@ RTC_PCF8523 rtc;
 const uint8_t interruptPin = 2;
 
 // array of months
-String monthNames[12] = 
-  {"January", "February", "March", 
-  "April", "May", "June", 
-  "July", "August", "September",
-  "October", "November", "December"};
+//String monthNames[12] = 
+//  {"January", "February", "March", 
+//  "April", "May", "June", 
+//  "July", "August", "September",
+//  "October", "November", "December"};
 
 // name of file to write to
-String dataFileName;
+//String dataFileName;
+
+// file to write to
+File dataFile;
 
 // variable to store data
 uint32_t data;
@@ -47,16 +43,21 @@ void setup()
 
   if (!rtc.begin()) 
   {
-    Serial.println("Couldn't find RTC.");
-    Serial.flush();
-    abort();
+    while(1)
+    {
+      delay(500);
+      digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+    }
   }
 
+  pinMode(chipSelect, OUTPUT);
   if (!SD.begin(chipSelect))
   {
-    Serial.println("Couldn't initialize SD card.");
-    Serial.flush();
-    abort();
+    while(1)
+    {
+      delay(500);
+      digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+    }
   }
 
   // let things settle down a bit
@@ -68,13 +69,6 @@ void setup()
   //rtc.enableCountdownTimer(PCF8523_FrequencyMinute, 5);
   rtc.enableCountdownTimer(PCF8523_FrequencySecond, 90);
   attachInterrupt(digitalPinToInterrupt(interruptPin), timer_interrupt, FALLING);
-
-  // get current date/time
-  DateTime now = rtc.now();
-  
-  // choose name of file to write to
-  //dataFileName = String(now.day()) + monthNames[now.month()-1] + String(now.year()) + "_solar_panel_data.csv";
-  dataFileName = "solar_panel_data.csv";
 
   // setup onboard LED
   pinMode(LED_BUILTIN, OUTPUT);
@@ -92,19 +86,19 @@ void loop()
   LowPower.powerDown(SLEEP_FOREVER, ADC_ON, BOD_ON);
 
   // interrupt was detected, process data
-  // turn on LED
+  // turn on LED, then wait a bit
   digitalWrite(LED_BUILTIN, HIGH);
+  delay(1000);
   // collect data
   data++;
   // log data
   DateTime now = rtc.now();
-  sd_write(String(now.day()) + monthNames[now.month()-1] + String(now.year()) + " " + String(now.hour()) + ":" + String(now.minute()) + ":" + String(now.second()) + 
-    + ", " + String(data) + "\n");
+  sd_write(String(now.month()) + "/" + String(now.day()) + "/" +  String(now.year()) + " " + 
+    String(now.hour()) + ":" + String(now.minute()) + ":" + String(now.second()) + 
+    + ", " + String(data));
   // wait a bit, then turn off LED
   delay(1000);
   digitalWrite(LED_BUILTIN, LOW);
-  // re-enable interrupts
-  //attachInterrupt(digitalPinToInterrupt(interruptPin), timer_interrupt, FALLING);
   
   Serial.println("Finished one iteration of loop().");
   Serial.flush();
@@ -112,13 +106,17 @@ void loop()
 
 void sd_write(String data_item)
 {
+  // select file name
+  char dataFileName[] = "test.csv";
+  
   // open file
-  File dataFile = SD.open(dataFileName, FILE_WRITE);
-
+  dataFile = SD.open(dataFileName, FILE_WRITE);
+  
   // write to file if it's available
   if (dataFile)
   {
     dataFile.println(data_item);
+    //dataFile.flush();
     dataFile.close();
   }
   else
@@ -132,8 +130,6 @@ void sd_write(String data_item)
 void timer_interrupt()
 {
   __asm__("nop\n\t");
-  // disable interrupts
-  //detachInterrupt(digitalPinToInterrupt(interruptPin));
   Serial.println("Entered interrupt handler.");
   Serial.flush();
 }
