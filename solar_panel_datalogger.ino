@@ -5,26 +5,15 @@
 #include <SPI.h>
 #include <SD.h>
 
-// change this to match your SD shield or module;
-// Adafruit SD shields and modules: pin 10
-const int chipSelect = 10;
-
-// Date and time functions using a PCF8523 RTC connected via I2C and Wire lib
+// include date and time functions using a PCF8523 RTC connected via I2C and Wire lib
 #include "RTClib.h"
-RTC_PCF8523 rtc;
 
-// pin receiving interrupt from RTC
-const uint8_t interruptPin = 2;
-
-// array of months
-//String monthNames[12] = 
-//  {"January", "February", "March", 
-//  "April", "May", "June", 
-//  "July", "August", "September",
-//  "October", "November", "December"};
-
-// name of file to write to
-//String dataFileName;
+// Define pins
+const uint8_t buttonInterruptPin  = 2;  // pin receiving interrupt from push button
+const uint8_t timerInterruptPin   = 3;  // pin receiving interrupt from RTC
+const uint8_t led1                = 4;  // pin driving LED1
+const uint8_t led2                = 5;  // pin driving LED2
+const uint8_t chipSelect          = 10; // Adafruit SD shields and modules: pin 10
 
 // file to write to
 File dataFile;
@@ -32,50 +21,46 @@ File dataFile;
 // variable to store data
 uint32_t data;
 
+// real-time clock object
+RTC_PCF8523 rtc;
+
+// variables to track status
+bool timer_interrupt_enabled    = false;
+bool timer_interrupt_triggered  = false;
+
 void setup() 
 {
-  //#ifdef DEBUG
-    Serial.begin(9600);
-    while(!Serial);
-    Serial.println("Debug mode active.");
-    Serial.flush();
-  //#endif
+  // set up pins
+  pinMode(buttonInterruptPin, INPUT_PULLUP);
+  pinMode(timerInterruptPin,  INPUT_PULLUP);
+  pinMode(led1,               OUTPUT);
+  pinMode(led2,               OUTPUT);
+  pinMode(chipSelect,         OUTPUT);
+  pinMode(LED_BUILTIN,        OUTPUT);
 
+  // initialize RTC
   if (!rtc.begin()) 
   {
-    Serial.println("Unable to find RTC.");
-    Serial.flush();
-    while(1)
-    {
-      delay(500);
-      digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
-    }
+    error_signal();
   }
 
-  pinMode(chipSelect, OUTPUT);
+  // initialize SD card
   if (!SD.begin(chipSelect))
   {
-    Serial.println("Unable to find SD.");
-    Serial.flush();
-    while(1)
-    {
-      delay(500);
-      digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
-    }
+    error_signal();
   }
 
   // let things settle down a bit
   delay(1000);
   
   // set up timer interrupt
-  pinMode(interruptPin, INPUT_PULLUP);
   rtc.deconfigureAllTimers();
-  //rtc.enableCountdownTimer(PCF8523_FrequencyMinute, 5);
-  rtc.enableCountdownTimer(PCF8523_FrequencySecond, 90);
-  attachInterrupt(digitalPinToInterrupt(interruptPin), timer_interrupt, FALLING);
+  rtc.enableCountdownTimer(PCF8523_FrequencyMinute, 5);
+  attachInterrupt(digitalPinToInterrupt(timerInterruptPin), timer_interrupt, FALLING);
+  timer_interrupt_enabled = true;
 
-  // setup onboard LED
-  pinMode(LED_BUILTIN, OUTPUT);
+  // set up button interrupt
+  attachInterrupt(digitalPinToInterrupt(buttonInterruptPin), button_interrupt, FALLING);
 
   // initialize data variable
   data = 0;
@@ -85,27 +70,31 @@ void loop()
 {
   // wait for interrupt
   // sleep forever, analog to digital converter on, brown out detector on
-  Serial.println("Enter sleep.");
-  Serial.flush();
   LowPower.powerDown(SLEEP_FOREVER, ADC_ON, BOD_ON);
 
-  // interrupt was detected, process data
-  // turn on LED, then wait a bit
-  digitalWrite(LED_BUILTIN, HIGH);
-  delay(1000);
-  // collect data
-  data++;
-  // log data
-  DateTime now = rtc.now();
-  sd_write(String(now.month()) + "/" + String(now.day()) + "/" +  String(now.year()) + " " + 
-    String(now.hour()) + ":" + String(now.minute()) + ":" + String(now.second()) + 
-    + ", " + String(data));
-  // wait a bit, then turn off LED
-  delay(1000);
-  digitalWrite(LED_BUILTIN, LOW);
+  // timer interrupt was detected, process data
+  if(timer_interrupt_triggered)
+  {
+    // turn on LED, then wait a bit
+    digitalWrite(led2, HIGH);
+    delay(1000);
+    
+    // collect data
+    data++;
   
-  Serial.println("Finished one iteration of loop().");
-  Serial.flush();
+    // log data
+    DateTime now = rtc.now();
+    sd_write(String(now.month()) + "/" + String(now.day()) + "/" +  String(now.year()) + " " + 
+      String(now.hour()) + ":" + String(now.minute()) + ":" + String(now.second()) + 
+      + ", " + String(data));
+  
+    // wait a bit, then turn off LED
+    delay(1000);
+    digitalWrite(led2, LOW);
+
+    // clear timer interrupt signal
+    timer_interrupt_triggered = false;
+  }
 }
 
 void sd_write(String data_item)
@@ -120,20 +109,47 @@ void sd_write(String data_item)
   if (dataFile)
   {
     dataFile.println(data_item);
-    //dataFile.flush();
     dataFile.close();
   }
   else
   {
-    // error indication here?
-    Serial.println("Unable to write to SD card.");
-    Serial.flush();
+    error_signal();
   }
 }
 
 void timer_interrupt()
 {
-  __asm__("nop\n\t");
-  Serial.println("Entered interrupt handler.");
-  Serial.flush();
+  //__asm__("nop\n\t");
+  timer_interrupt_triggered = true;
+}
+
+void button_interrupt()
+{
+  if (timer_interrupt_enabled)
+  {
+    digitalWrite(led1, HIGH);
+    detachInterrupt(digitalPinToInterrupt(timerInterruptPin));
+    timer_interrupt_enabled = false;
+  }
+  else
+  {
+    digitalWrite(led1, LOW);
+    attachInterrupt(digitalPinToInterrupt(timerInterruptPin), timer_interrupt, FALLING);
+    timer_interrupt_enabled = true;
+  }
+
+  // debounce button
+  delay(500);
+
+  // make it clear that this wasn't a timer interrupt
+  timer_interrupt_triggered = false;
+}
+
+void error_signal()
+{
+    while(1)
+    {
+      delay(500);
+      digitalWrite(led2, !digitalRead(LED_BUILTIN));
+    }
 }
