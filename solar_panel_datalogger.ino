@@ -14,6 +14,7 @@ const uint8_t timerInterruptPin   = 3;  // pin receiving interrupt from RTC
 const uint8_t led1                = 4;  // pin driving LED1
 const uint8_t led2                = 5;  // pin driving LED2
 const uint8_t chipSelect          = 10; // Adafruit SD shields and modules: pin 10
+const uint8_t inputPin            = A0; // analog pin reading input voltage
 
 // file to write to
 File dataFile;
@@ -36,6 +37,7 @@ void setup()
   pinMode(led1,               OUTPUT);
   pinMode(led2,               OUTPUT);
   pinMode(chipSelect,         OUTPUT);
+  //pinMode(inputPin,           INPUT); // Not necessary for analog pin.
   pinMode(LED_BUILTIN,        OUTPUT);
 
   // initialize RTC
@@ -80,7 +82,7 @@ void loop()
     delay(1000);
     
     // collect data
-    data++;
+    data = analogRead(inputPin);
   
     // log data
     DateTime now = rtc.now();
@@ -100,7 +102,7 @@ void loop()
 void sd_write(String data_item)
 {
   // select file name
-  char dataFileName[] = "test.csv";
+  char dataFileName[] = "data.csv";
   
   // open file
   dataFile = SD.open(dataFileName, FILE_WRITE);
@@ -150,6 +152,6 @@ void error_signal()
     while(1)
     {
       delay(500);
-      digitalWrite(led2, !digitalRead(LED_BUILTIN));
+      digitalWrite(led2, !digitalRead(led2));
     }
 }
